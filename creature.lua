@@ -1,7 +1,6 @@
 local Creature = {}
-local SETTINGS = {
-  feelers = 10;
-};
+Creature.FEELERS = 10
+Creature.FEELER_LENGTH = 110
 
 function Creature.new(x, y, inputs, outputs, hiddens)
   local self = setmetatable({}, {__index = Creature})
@@ -17,11 +16,11 @@ function Creature.new(x, y, inputs, outputs, hiddens)
   }
   
   self.feelers = {}
-  for i = 0, SETTINGS.feelers - 1 do
-    table.insert(self.feelers, Ray.new(GAME.world:ToVoxel(self.pos), {
-      x = math.cos(2*math.pi*(i/SETTINGS.feelers));
-      y = math.sin(2*math.pi*(i/SETTINGS.feelers));
-    }))
+  for i = 0, Creature.FEELERS - 1 do
+    table.insert(self.feelers, Ray.new(self.pos, {
+      x = math.cos(2*math.pi*(i/Creature.FEELERS) + math.pi/10);
+      y = math.sin(2*math.pi*(i/Creature.FEELERS) + math.pi/10);
+    }, Creature.FEELER_LENGTH))
   end
 
   -- do an initial feed forward
@@ -30,6 +29,7 @@ function Creature.new(x, y, inputs, outputs, hiddens)
     self.inputs[i] = 0.0
   end
   self.outputs = self.brain:FeedForward(self.inputs)
+  print(#self.outputs)
 
   return self
 end
@@ -46,13 +46,28 @@ function Creature:Update(dt)
   local et = love.timer.getTime()
   self:UpdateInputs({math.sin(et)/2.0 + 0.50})
   self:UpdateOutputs()
-  for i, v in ipairs(self.outputs) do
-    io.write(v .. " ")
+  self.pos.x = self.pos.x + (self.outputs[1] - 0.50)*dt*3.0
+  self.pos.y = self.pos.y + (self.outputs[2] - 0.50)*dt*3.0
+  for _, feeler in ipairs(self.feelers) do
+    feeler:SetOrigin(self.pos)
   end
-  print()
 end
 
 function Creature:Draw()
+  
+  for _, feeler in ipairs(self.feelers) do
+    love.graphics.setColor(0.80, 0.80, 0.80, 0.30)
+    for _, voxel in ipairs(feeler:GetVoxelsOnRay()) do
+      local ppos = GAME.world:ToPixel(voxel)
+      love.graphics.rectangle("fill", ppos.x, ppos.y, World.VOXEL_SIZE, World.VOXEL_SIZE)
+    end
+
+    love.graphics.setColor(1, 0, 0)
+    local start = feeler.origin
+    local finish = feeler:GetPixelEndPoint()
+    love.graphics.line(start.x, start.y, finish.x, finish.y)
+  end
+  love.graphics.setColor(0, 0, 1)
   love.graphics.circle("fill", self.pos.x, self.pos.y, 30)
 end
 

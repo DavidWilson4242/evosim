@@ -192,7 +192,7 @@ static int luabinding_FeedForward(lua_State *L) {
   /* call feed forward */
   double *outputs = net_feed_forward(network, inputs, network->inputs);
   lua_newtable(L);
-  for (size_t i = 0; i < network->inputs; i++) {
+  for (size_t i = 0; i < network->outputs; i++) {
     lua_pushnumber(L, outputs[i]);
     lua_rawseti(L, -2, i + 1);
   }

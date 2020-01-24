@@ -1,11 +1,11 @@
 local Ray = {}
 
-function Ray.new(origin, direction)
+function Ray.new(origin, direction, magnitude)
   
-  local magnitude = math.sqrt(math.pow(direction.x, 2) + math.pow(direction.y, 2))
+  local dirmag = math.sqrt(math.pow(direction.x, 2) + math.pow(direction.y, 2))
   local unit = {
-    x = direction.x/magnitude;
-    y = direction.y/magnitude;
+    x = direction.x/dirmag;
+    y = direction.y/dirmag;
   }
   local start = {
     x = origin.x;
@@ -15,6 +15,7 @@ function Ray.new(origin, direction)
   local self = setmetatable({}, {__index = Ray})
   self.origin = start
   self.unit = unit
+  self.magnitude = magnitude
 
   return self
 
@@ -25,23 +26,30 @@ function Ray:SetOrigin(origin)
   self.origin.y = origin.y
 end
 
-function Ray:GetVoxelsOnRay(voxelDistance) 
+function Ray:GetVoxelsOnRay() 
  
   local nodes = {}
 
-  for i = 1, math.ceil(voxelDistance) do
+  for i = 0, math.ceil(self.magnitude) do
     local nodePixel = {
       x = self.origin.x + self.unit.x*i;
       y = self.origin.y + self.unit.y*i;
     }
     local node = GAME.world:ToVoxel(nodePixel)
-    if nodes[#nodes].x ~= node.x and nodes[#nodes].y ~= node.y then
+    if #nodes == 0 or (nodes[#nodes].x ~= node.x or nodes[#nodes].y ~= node.y) then
       table.insert(nodes, node)
     end
   end
 
   return nodes
 
+end
+
+function Ray:GetPixelEndPoint()
+  return {
+    x = self.origin.x + self.unit.x*self.magnitude;
+    y = self.origin.y + self.unit.y*self.magnitude;
+  }
 end
 
 return Ray

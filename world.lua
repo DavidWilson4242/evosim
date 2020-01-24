@@ -1,5 +1,5 @@
 local World = {}
-World.VOXEL_SIZE = 4
+World.VOXEL_SIZE = 20
 
 function World.new()
   local self = setmetatable({}, {__index = World})

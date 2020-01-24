@@ -10,14 +10,18 @@ GAME = {
 local creatures = {}
 
 function love.load()
-  local creature = Creature.new(100, 100, 1, 5, {16, 16, 16})
-  table.insert(creatures, creature)
+  for i = 1, 10 do
+    table.insert(creatures, Creature.new(math.random(100, 1100), math.random(100, 800), 1, 2, {16}))
+  end
 end
 
-function love.draw(dt)
+function love.update(dt)
   for _, creature in ipairs(creatures) do
     creature:Update(dt)
   end
+end
+
+function love.draw(dt)
 
   love.graphics.clear(82/255, 82/255, 82/255)
 
