@@ -12,6 +12,7 @@ static int luabinding_FeedForward(lua_State *L);
 static int luabinding_TweakWeights(lua_State *L);
 static int luabinding_GetDimensions(lua_State *L);
 static int luabinding_GetValue(lua_State *L);
+static int luabinding_GetWeight(lua_State *L);
 
 static const struct {
   char *methodname;
@@ -20,18 +21,75 @@ static const struct {
   {"FeedForward",   luabinding_FeedForward},
   {"TweakWeights",  luabinding_TweakWeights},
   {"GetDimensions", luabinding_GetDimensions},
-  {"GetValue",      luabinding_GetValue}
+  {"GetValue",      luabinding_GetValue},
+  {"GetWeight",     luabinding_GetWeight}
 };
 
-static NeuralNetwork_T *get_network(lua_State *L, int index) {
-    luaL_checktype(L, index, LUA_TUSERDATA);
-    return *(NeuralNetwork_T **)lua_touserdata(L, index);
+static NeuralNetwork_T *network_get(lua_State *L, int index) {
+  luaL_checktype(L, index, LUA_TUSERDATA);
+  return *(NeuralNetwork_T **)lua_touserdata(L, index);
+}
+
+static void network_assert_layer(lua_State *L, NeuralNetwork_T *network, 
+                                 int layer) {
+  if (layer < 0 || layer >= network->layer_count) {
+    lua_pushstring(L, "nnlib error: layer index out of bounds");
+    lua_error(L);
+  }
+}
+
+static void network_assert_neuron(lua_State *L, NeuralNetwork_T *network,
+                                  int layer, int neuron_index) {
+  network_assert_layer(L, network, layer);
+  if (neuron_index < 0 || neuron_index >= network->layers[layer].neuron_count) {
+    lua_pushstring(L, "nnlib error: neuron index out of bounds");
+    lua_error(L);
+  }
+}
+
+static void network_assert_axon(lua_State *L, NeuralNetwork_T *network,
+                                int layer, int neuron_index,
+                                int axon_index) {
+  network_assert_neuron(L, network, layer, neuron_index);
+  if (axon_index < 0 || axon_index >= network->layers[layer].neurons[neuron_index].axon_count) {
+    lua_pushstring(L, "nnlib error: weight index out of bounds");
+    lua_error(L);
+  }
+}
+
+static int network_method_lookup(lua_State *L) {
+
+  NeuralNetwork_T *network = network_get(L, 1);
+  const char *key = luaL_checkstring(L, 2); 
+  
+  for (size_t i = 0; i < sizeof(methods)/sizeof(methods[0]); i++) {
+    if (!strcmp(key, methods[i].methodname)) {
+      lua_pushcfunction(L, methods[i].cfunc);
+      return 1;
+    }
+  }
+
+  return 0;
+}
+
+static int network_garbagecollect(lua_State *L) {
+ 
+  NeuralNetwork_T *network = network_get(L, 1);
+  net_free(&network);
+  return 0;
+
+}
+
+static int network_newindex(lua_State *L) {
+  lua_pushstring(L, "nnlib error: cannot add values to network object");
+  lua_error(L);
+  return 0;
 }
 
 /* returns inputs, outputs, {hidden0, hidden1, ...} */
 static int luabinding_GetDimensions(lua_State *L) {
 
-  NeuralNetwork_T *network = get_network(L, 1);
+  NeuralNetwork_T *network = network_get(L, 1);
 
   lua_pushinteger(L, network->inputs);
   lua_pushinteger(L, network->outputs);
@@ -48,28 +106,44 @@ static int luabinding_GetDimensions(lua_State *L) {
 /* given a layer and a neuron index, returns that neuron's value */
 static int luabinding_GetValue(lua_State *L) {
   
-  NeuralNetwork_T *network = get_network(L, 1);
+  NeuralNetwork_T *network = network_get(L, 1);
   unsigned layer = luaL_checknumber(L, 2) - 1;
   unsigned index = luaL_checknumber(L, 3) - 1;
-
-  if (layer < 0 || layer >= network->layer_count) {
-    lua_pushstring(L, "nnlib error: layer out of bounds");
-    lua_error(L);
-  }
-
-  if (index < 0 || index >= network->layers[layer].neuron_count) {
-    lua_pushstring(L, "nnlib error: neuron index out of bounds");
-    lua_error(L);
-  }
-
+  
+  network_assert_neuron(L, network, layer, index);
   lua_pushnumber(L, network->layers[layer].neurons[index].value);
 
   return 1; 
 }
 
+/* given a layer, neuron index and weight index, returns
+ * the value of that weight
+ *
+ * example call: network:GetWeight(1, 2, 3)
+ * in this case, the weight of the connection between
+ * the second neuron in the input layer and the third
+ * neuron in the next layer is returned */
+static int luabinding_GetWeight(lua_State *L) {
+  
+  NeuralNetwork_T *network = network_get(L, 1);
+  unsigned layer           = luaL_checknumber(L, 2) - 1;
+  unsigned neuron_index    = luaL_checknumber(L, 3) - 1;
+  unsigned weight_index    = luaL_checknumber(L, 4) - 1;
+
+  network_assert_axon(L, network, layer, neuron_index, weight_index);
+  lua_pushnumber(L, network->layers[layer].neurons[neuron_index].axons[weight_index].weight);
+
+  return 1;
+
+}
+
+/* expects a Lua function as an argument.  the function is mapped
+ * to each weight in the network, taking the current weight as
+ * an argument.  updates the value of the weight with whatever
+ * is returned */
 static int luabinding_TweakWeights(lua_State *L) {
 
-  NeuralNetwork_T *network = get_network(L, 1);
+  NeuralNetwork_T *network = network_get(L, 1);
   luaL_checktype(L, 2, LUA_TFUNCTION);
 
   /* apply the lua function to each weight */
@@ -91,9 +165,12 @@ static int luabinding_TweakWeights(lua_State *L) {
 
 }
 
+/* given an array of input values that is the same size as the
+ * network's input layer, feeds the data forward and returns
+ * the output as a table of numbers */
 static int luabinding_FeedForward(lua_State *L) {
 
-  NeuralNetwork_T *network = get_network(L, 1);
+  NeuralNetwork_T *network = network_get(L, 1);
   luaL_checktype(L, 2, LUA_TTABLE);
 
   if (lua_objlen(L, 2) != network->inputs) {
@@ -124,29 +201,6 @@ static int luabinding_FeedForward(lua_State *L) {
   free(outputs);
 
   return 1;
-}
-
-static int network_method_lookup(lua_State *L) {
-
-  NeuralNetwork_T *network = get_network(L, 1);
-  const char *key = luaL_checkstring(L, 2); 
-  
-  for (size_t i = 0; i < sizeof(methods)/sizeof(methods[0]); i++) {
-    if (!strcmp(key, methods[i].methodname)) {
-      lua_pushcfunction(L, methods[i].cfunc);
-      return 1;
-    }
-  }
-
-  return 0;
-}
-
-static int network_garbagecollect(lua_State *L) {
- 
-  NeuralNetwork_T *network = get_network(L, 1);
-  net_free(&network);
-  return 0;
-
 }
 
 static int luabinding_CreateNetwork(lua_State *L) {
@@ -181,6 +235,8 @@ static int luabinding_CreateNetwork(lua_State *L) {
   lua_newtable(L);
   lua_pushcfunction(L, network_method_lookup);
   lua_setfield(L, -2, "__index");
+  lua_pushcfunction(L, network_newindex);
+  lua_setfield(L, -2, "__newindex");
   lua_pushcfunction(L, network_garbagecollect);
   lua_setfield(L, -2, "__gc");
   lua_setmetatable(L, -2);
