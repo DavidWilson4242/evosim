@@ -40,6 +40,7 @@ typedef struct NeuralNetwork {
 
 NeuralNetwork_T *net_make(unsigned inputs, unsigned outputs, 
                           unsigned *hiddens, size_t hidden_count);
+void net_free(NeuralNetwork_T **);
 double *net_feed_forward(NeuralNetwork_T *network, double *inputs, size_t input_count);
 
 #endif

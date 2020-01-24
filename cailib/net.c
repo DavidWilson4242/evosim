@@ -95,6 +95,27 @@ NeuralNetwork_T *net_make(unsigned inputs, unsigned outputs,
     return network;
 }
 
+void net_free(NeuralNetwork_T **networkp) {
+  assert(networkp && *networkp);
+
+  NeuralNetwork_T *network = *networkp;
+
+  for (size_t i = 0; i < network->layer_count; i++) {
+    NetworkLayer_T *layer = &network->layers[i];
+    for (size_t j = 0; j < layer->neuron_count; j++) {
+      free(layer->neurons[j].axons);
+    }
+    free(layer->neurons);
+  }
+
+  free(network->layers);
+  free(network->hiddens);
+  free(network->layer_counts);
+  free(network);
+
+  *networkp = NULL;
+}
+
 void net_backprop(NeuralNetwork_T *network, double *expected) {
     
     double cost = 0.0f;
