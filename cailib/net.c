@@ -81,7 +81,7 @@ NeuralNetwork_T *net_make(unsigned inputs, unsigned outputs,
                 assert(this_neuron->axons);
                 this_neuron->axon_count = next_layer->neuron_count; 
                 for (size_t k = 0; k < next_layer->neuron_count; k++) {
-                    this_neuron->axons[k].weight = (double)rand()/RAND_MAX;
+                    this_neuron->axons[k].weight = ((double)rand()/RAND_MAX - 0.50)*2.0;
                     this_neuron->axons[k].from = this_neuron;
                     this_neuron->axons[k].to = &next_layer->neurons[k];
                 }
