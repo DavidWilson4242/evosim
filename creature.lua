@@ -24,6 +24,8 @@ function Creature.new(x, y)
     x = x;
     y = y;
   }
+
+  self.health = 1.0
   
   self.feelers = {}
   for i = 0, Creature.FEELERS - 1 do

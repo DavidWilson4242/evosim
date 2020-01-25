@@ -1,5 +1,7 @@
 local World = {}
 World.VOXEL_SIZE = 20
+World.VOXEL_SX = 800
+World.VOXEL_SY = 800
 
 function World.new()
   local self = setmetatable({}, {__index = World})
@@ -8,8 +10,8 @@ function World.new()
     y = love.graphics.getHeight();
   }
   self.voxelSize = {
-    x = math.floor(self.screenSize.x/World.VOXEL_SIZE);
-    y = math.floor(self.screenSize.y/World.VOXEL_SIZE);
+    x = World.VOXEL_SX;
+    y = World.VOXEL_SY;
   }
   self.tiles = {}
 
