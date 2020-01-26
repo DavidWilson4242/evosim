@@ -1,6 +1,6 @@
 local Creature = {}
 Creature.FEELERS = 10
-Creature.FEELER_LENGTH = 110
+Creature.FEELER_LENGTH = 30
 Creature.BRAIN_FRAME_SCALE = {
   x = 0.20;
   y = 0.50;
@@ -26,6 +26,11 @@ function Creature.new(x, y)
   }
 
   self.health = 1.0
+  self.foodEaten = 0
+
+  self.brain:TweakWeights(function(old)
+    return (math.random() - 0.50) * 2.0
+  end)
   
   self.feelers = {}
   for i = 0, Creature.FEELERS - 1 do
@@ -75,33 +80,58 @@ function Creature:Update(dt)
   local et = love.timer.getTime()
   self:UpdateInputs()
   self:UpdateOutputs()
-  self.pos.x = self.pos.x + (self.outputs[1] - 0.50)*dt*3.0
-  self.pos.y = self.pos.y + (self.outputs[2] - 0.50)*dt*3.0
+  self.pos.x = self.pos.x + (self.outputs[1] - 0.50)*dt*20.0
+  self.pos.y = self.pos.y + (self.outputs[2] - 0.50)*dt*20.0
   for _, feeler in ipairs(self.feelers) do
     feeler:SetOrigin(self.pos)
+  end
+  self.health = self.health - dt/120.0
+
+  local myVoxel = GAME.world:ToVoxel(self.pos)
+  local tiles = GAME.world:GetTilesAt(myVoxel)
+  if tiles then
+    GAME.world:RemoveAllTilesAt(myVoxel)
+    self.health = 1.0
+    self.foodEaten = self.foodEaten + 1
+    if self.foodEaten % 5 == 0 then
+      self:Reproduce()
+    end
+  end
+
+  if self.health <= 0 then
+    self:Die()
+  end
+end
+
+function Creature:Reproduce()
+  local creature = Creature.new(self.pos.x, self.pos.y)
+  creature.brain = self.brain:Duplicate()
+  table.insert(GAME.creatures, creature)
+end
+
+function Creature:Die()
+  for i, creature in ipairs(GAME.creatures) do
+    if creature == self then
+      table.remove(GAME.creatures, i)
+      break
+    end
   end
 end
 
 function Creature:Draw()
+
+  local rootDrawPos = GAME.world:ApplyCameraToPixel(self.pos)
   
   for _, feeler in ipairs(self.feelers) do
-    --[[
-    love.graphics.setColor(0.80, 0.80, 0.80, 0.30)
-    for _, voxel in ipairs(feeler:GetVoxelsOnRay()) do
-      local ppos = GAME.world:ToPixel(voxel)
-      love.graphics.rectangle("fill", ppos.x, ppos.y, World.VOXEL_SIZE, World.VOXEL_SIZE)
-    end
-    ]]
-
     love.graphics.setColor(1, 0, 0)
-    local start = feeler.origin
-    local finish = feeler:GetPixelEndPoint()
+    local start = GAME.world:ApplyCameraToPixel(feeler.origin)
+    local finish = GAME.world:ApplyCameraToPixel(feeler:GetPixelEndPoint())
     love.graphics.line(start.x, start.y, finish.x, finish.y)
   end
 
   -- draw creature body
-  love.graphics.setColor(0, 0, 1)
-  love.graphics.circle("fill", self.pos.x, self.pos.y, 30)
+  love.graphics.setColor(255/255*self.health, 100/255*self.health, 100/255*self.health)
+  love.graphics.circle("fill", rootDrawPos.x, rootDrawPos.y, 10)
 
 end
 

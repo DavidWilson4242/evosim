@@ -13,6 +13,7 @@ static int luabinding_TweakWeights(lua_State *L);
 static int luabinding_GetDimensions(lua_State *L);
 static int luabinding_GetValue(lua_State *L);
 static int luabinding_GetWeight(lua_State *L);
+static int luabinding_Duplicate(lua_State *L);
 
 static const struct {
   char *methodname;
@@ -22,7 +23,8 @@ static const struct {
   {"TweakWeights",  luabinding_TweakWeights},
   {"GetDimensions", luabinding_GetDimensions},
   {"GetValue",      luabinding_GetValue},
-  {"GetWeight",     luabinding_GetWeight}
+  {"GetWeight",     luabinding_GetWeight},
+  {"Duplicate",     luabinding_Duplicate}
 };
 
 static NeuralNetwork_T *network_get(lua_State *L, int index) {
@@ -84,6 +86,33 @@ static int network_newindex(lua_State *L) {
   lua_pushstring(L, "nnlib error: cannot add values to network object");
   lua_error(L);
   return 0;
+}
+
+static void network_push_userdata(lua_State *L, NeuralNetwork_T *network) {
+
+  NeuralNetwork_T **userdata = lua_newuserdata(L, sizeof(NeuralNetwork_T *));
+  *userdata = network;
+
+  /* setup the metatable */
+  lua_newtable(L);
+  lua_pushcfunction(L, network_method_lookup);
+  lua_setfield(L, -2, "__index");
+  lua_pushcfunction(L, network_newindex);
+  lua_setfield(L, -2, "__newindex");
+  lua_pushcfunction(L, network_garbagecollect);
+  lua_setfield(L, -2, "__gc");
+  lua_setmetatable(L, -2);
+
+}
+
+static int luabinding_Duplicate(lua_State *L) {
+  
+  NeuralNetwork_T *network = network_get(L, 1);
+  NeuralNetwork_T *copy = net_copy(network);
+  network_push_userdata(L, copy);
+
+  return 1;
+
 }
 
 /* returns inputs, outputs, {hidden0, hidden1, ...} */
@@ -228,18 +257,7 @@ static int luabinding_CreateNetwork(lua_State *L) {
 
   /* lua gets a userdata value that is actually a pointer to out network struct */
   NeuralNetwork_T *network = net_make(inputs, outputs, hiddens, hidden_count);
-  NeuralNetwork_T **userdata = lua_newuserdata(L, sizeof(NeuralNetwork_T *));
-  *userdata = network;
-
-  /* setup the metatable */
-  lua_newtable(L);
-  lua_pushcfunction(L, network_method_lookup);
-  lua_setfield(L, -2, "__index");
-  lua_pushcfunction(L, network_newindex);
-  lua_setfield(L, -2, "__newindex");
-  lua_pushcfunction(L, network_garbagecollect);
-  lua_setfield(L, -2, "__gc");
-  lua_setmetatable(L, -2);
+  network_push_userdata(L, network);
 
   /* the network library makes a copy of the hidden 
    * layer counts, so free the one we just allocated */

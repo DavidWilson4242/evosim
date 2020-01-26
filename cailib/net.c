@@ -95,6 +95,22 @@ NeuralNetwork_T *net_make(unsigned inputs, unsigned outputs,
     return network;
 }
 
+NeuralNetwork_T *net_copy(NeuralNetwork_T *network) {
+  NeuralNetwork_T *copy = net_make(network->inputs, network->outputs,
+                                   network->hiddens, network->hidden_count);
+  for (size_t i = 0; i < copy->layer_count - 1; i++) {
+    for (size_t j = 0; j < copy->layers[j].neuron_count; j++) {
+      Neuron_T *neuron = &copy->layers[i].neurons[j];
+      Neuron_T *template = &network->layers[i].neurons[j];
+      for (size_t k = 0; k < neuron->axon_count; k++) {
+        neuron->axons[k].weight = template->axons[k].weight;
+      }
+    }
+  }
+
+  return copy;
+}
+
 void net_free(NeuralNetwork_T **networkp) {
   assert(networkp && *networkp);
 
