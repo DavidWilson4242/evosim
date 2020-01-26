@@ -1,24 +1,25 @@
-local Food = {}
+local DeathBlock = {}
 
-function Food.new(voxel)
+function DeathBlock.new(voxel)
 
-  local self = setmetatable({}, {__index = Food})
-  self.className = "Food"
+  local self = setmetatable({}, {__index = DeathBlock})
+  self.className = "DeathBlock"
   self.pos = {
     x = voxel.x;
     y = voxel.y;
   }
   self.color = {
-    r = 50/255;
-    g = 168/255;
-    b = 82/255;
+    r = 0;
+    g = 0;
+    b = 0;
+    a = 0.40;
   }
 
   return self
 
 end
 
-function Food:Draw()
+function DeathBlock:Draw()
   
   local pixelp = GAME.world:ToPixel(self.pos)
 
@@ -27,10 +28,10 @@ function Food:Draw()
      return
   end
 
-  love.graphics.setColor(self.color.r, self.color.g, self.color.b)
+  love.graphics.setColor(self.color.r, self.color.g, self.color.b, self.color.a)
   love.graphics.rectangle("fill", pixelp.x, pixelp.y, 
                           World.VOXEL_SIZE, World.VOXEL_SIZE)
 
 end
 
-return Food
+return DeathBlock

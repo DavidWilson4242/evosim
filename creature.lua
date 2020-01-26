@@ -1,17 +1,21 @@
 local Creature = {}
 Creature.FEELERS = 10
-Creature.FEELER_LENGTH = 30
+Creature.FEELER_LENGTH = 55
 Creature.BRAIN_FRAME_SCALE = {
   x = 0.20;
   y = 0.50;
 }
 
+local function constrain(n, min, max)
+  return n < min and min or n > max and max or n
+end
+
 function Creature.new(x, y)
   local self = setmetatable({}, {__index = Creature})
   
-  local inputs = 1 + Creature.FEELERS*3
+  local inputs = 1 + Creature.FEELERS*2
   local outputs = 2
-  local hiddens = {6, 6, 6}
+  local hiddens = {20}
 
   self.brain = Network.CreateNetwork(inputs, outputs, hiddens)
   self.inputs = {}
@@ -24,6 +28,14 @@ function Creature.new(x, y)
     x = x;
     y = y;
   }
+  self.radius = 20
+
+  self.color = {
+    r = math.random();
+    g = math.random();
+    b = math.random();
+  }
+  self.colorString = self:MakeColorString()
 
   self.health = 1.0
   self.foodEaten = 0
@@ -38,6 +50,7 @@ function Creature.new(x, y)
       x = math.cos(2*math.pi*(i/Creature.FEELERS) + math.pi/10);
       y = math.sin(2*math.pi*(i/Creature.FEELERS) + math.pi/10);
     }, Creature.FEELER_LENGTH))
+    self.feelers[#self.feelers].touching = false
   end
 
   -- do an initial feed forward
@@ -52,25 +65,28 @@ function Creature:UpdateOutputs()
 end
 
 function Creature:UpdateInputs()
-  self.inputs[1] = (math.sin(love.timer.getTime()) - 0.50)*2.0
+  self.inputs[1] = (math.sin(GAME.world.elapsedTime) + 1.0)*0.50
 
   for i, feeler in ipairs(self.feelers) do
     local nodes = feeler:GetVoxelsOnRay()  
-    local foundTile = false
+    feeler.touching = false
     for _, voxel in ipairs(nodes) do
       local tiles = GAME.world:GetTilesAt(voxel)
       if tiles then
-        foundTile = true
-        self.inputs[2 + (i*3 - 3)] = tiles[1].color.r
-        self.inputs[2 + (i*3 - 2)] = tiles[1].color.g
-        self.inputs[2 + (i*3 - 1)] = tiles[1].color.b
+        feeler.touching = true
+        if tiles[1].className == "DeathBlock" then
+          self.inputs[1 + i*2 - 1] = 1.0
+          self.inputs[1 + i*2]     = 0.0
+        else
+          self.inputs[1 + i*2 - 1] = 0.0
+          self.inputs[1 + i*2]     = 1.0
+        end
         break
       end
     end
-    if not foundTile then
-      self.inputs[2 + (i*3 - 3)] = 0.00
-      self.inputs[2 + (i*3 - 2)] = 0.00
-      self.inputs[2 + (i*3 - 1)] = 0.00
+    if not feeler.touching then
+        self.inputs[1 + i*2 - 1] = 0.0
+        self.inputs[1 + i*2]     = 0.0
     end
   end
 
@@ -85,16 +101,22 @@ function Creature:Update(dt)
   for _, feeler in ipairs(self.feelers) do
     feeler:SetOrigin(self.pos)
   end
-  self.health = self.health - dt/120.0
+  self.health = self.health - dt/400.0
 
   local myVoxel = GAME.world:ToVoxel(self.pos)
   local tiles = GAME.world:GetTilesAt(myVoxel)
   if tiles then
-    GAME.world:RemoveAllTilesAt(myVoxel)
-    self.health = 1.0
-    self.foodEaten = self.foodEaten + 1
-    if self.foodEaten % 5 == 0 then
-      self:Reproduce()
+    if tiles[1].className == "Food" then
+      GAME.world:RemoveAllTilesAt(myVoxel)
+      GAME.world:AddFoodRefresh(myVoxel)
+      self.health = 1.0
+      self.foodEaten = self.foodEaten + 1
+      if self.foodEaten % 8 == 0 then
+        self:Reproduce()
+      end
+    elseif tiles[1].className == "DeathBlock" then
+      self:Die()
+      return
     end
   end
 
@@ -103,10 +125,29 @@ function Creature:Update(dt)
   end
 end
 
+function Creature:MakeColorString()
+  local r = math.floor(self.color.r*255)
+  local g = math.floor(self.color.g*255)
+  local b = math.floor(self.color.b*255)
+  return r .. "|" .. g .. "|" .. b
+end
+
 function Creature:Reproduce()
   local creature = Creature.new(self.pos.x, self.pos.y)
   creature.brain = self.brain:Duplicate()
+  creature.brain:TweakWeights(function(oldWeight)
+    if math.random() < 0.80 then
+      return oldWeight
+    end
+    return oldWeight + (math.random() - 0.50)*2.0*0.30
+  end)
+  creature.color.r = self.color.r
+  creature.color.g = self.color.g
+  creature.color.b = self.color.b
+  creature.colorString = self.colorString
   table.insert(GAME.creatures, creature)
+
+  GAME.world:UpdateLeaderboard()
 end
 
 function Creature:Die()
@@ -118,20 +159,30 @@ function Creature:Die()
   end
 end
 
+function Creature:PositionIsInBounds(pixelPosition)
+  local squaredDist = math.pow(self.pos.x - pixelPosition.x, 2) +
+                      math.pow(self.pos.y - pixelPosition.y, 2)
+  return squaredDist < math.pow(self.radius, 2)
+end
+
 function Creature:Draw()
 
   local rootDrawPos = GAME.world:ApplyCameraToPixel(self.pos)
   
   for _, feeler in ipairs(self.feelers) do
-    love.graphics.setColor(1, 0, 0)
+    if feeler.touching then
+      love.graphics.setColor(1, 1, 1)
+    else 
+      love.graphics.setColor(1, 0, 0)
+    end
     local start = GAME.world:ApplyCameraToPixel(feeler.origin)
     local finish = GAME.world:ApplyCameraToPixel(feeler:GetPixelEndPoint())
     love.graphics.line(start.x, start.y, finish.x, finish.y)
   end
 
   -- draw creature body
-  love.graphics.setColor(255/255*self.health, 100/255*self.health, 100/255*self.health)
-  love.graphics.circle("fill", rootDrawPos.x, rootDrawPos.y, 10)
+  love.graphics.setColor(self.color.r, self.color.g, self.color.b)
+  love.graphics.circle("fill", rootDrawPos.x, rootDrawPos.y, self.radius)
 
 end
 
@@ -174,6 +225,9 @@ function Creature:DrawBrain()
   for i = 1, #layerCounts - 1 do
     for j = 1, layerCounts[i] do
       for k = 1, layerCounts[i + 1] do
+        local weight = self.brain:GetWeight(i, j, k)
+        local scaled = (constrain(weight, -1.0, 1.0) + 1.0)*0.50
+        love.graphics.setColor(scaled, scaled, scaled)
         love.graphics.line(neuronPositions[i][j].x,   neuronPositions[i][j].y,
                            neuronPositions[i+1][k].x, neuronPositions[i+1][k].y)
       end

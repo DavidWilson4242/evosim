@@ -4,6 +4,7 @@ World.VOXEL_SX = 300 --math.ceil(love.graphics.getWidth()/World.VOXEL_SIZE)
 World.VOXEL_SY = 300 -- math.ceil(love.graphics.getHeight()/World.VOXEL_SIZE)
 World.ABSOLUTE_SX = World.VOXEL_SIZE*World.VOXEL_SX
 World.ABSOLUTE_SY = World.VOXEL_SIZE*World.VOXEL_SY
+World.FOOD_REFRESH_TIME = 250
 
 function World.new()
   local self = setmetatable({}, {__index = World})
@@ -15,12 +16,15 @@ function World.new()
     x = World.VOXEL_SX;
     y = World.VOXEL_SY;
   }
-  self.tiles = {}
-
   self.cameraPos = {
     x = 0;
     y = 0;
   }
+  self.tiles = {}
+
+  self.foodRecharge = {}
+
+  self.elapsedTime = 0.00
 
   -- initialize food
   self:GenerateEnvironment()
@@ -38,21 +42,84 @@ function World:Draw()
   end
 end
 
+function World:Update(dt)
+  self.elapsedTime = self.elapsedTime + dt
+
+  -- check for new food items to create
+  for i = #self.foodRecharge, 1, -1 do
+    local entry = self.foodRecharge[i]
+    if self.elapsedTime > entry.targetTime then
+      self:CreateFoodAt(entry.voxel)
+      table.remove(self.foodRecharge, i)
+    end
+  end
+    
+end
+
+function World:UpdateLeaderboard()
+  GAME.leaderboard = {}
+  for _, creature in ipairs(GAME.creatures) do
+    local slot = GAME.leaderboard[creature.colorString]
+    if slot then
+      slot.amount = slot.amount + 1
+    else
+      GAME.leaderboard[creature.colorString] = {
+        amount = 1;
+        r = creature.color.r;
+        g = creature.color.g;
+        b = creature.color.b;
+      }
+    end
+  end
+end
+
 function World:GenerateEnvironment()
+  for i = 1, World.VOXEL_SX do
+    self:CreateDeathBlockAt({x = i; y = 1})
+    self:CreateDeathBlockAt({x = i; y = World.VOXEL_SY})
+  end
+  for i = 1, World.VOXEL_SY do
+    self:CreateDeathBlockAt({x = 1;              y = i})
+    self:CreateDeathBlockAt({x = World.VOXEL_SX; y = i})
+  end
   for i = 1, self.voxelSize.x do
     for j = 1, self.voxelSize.y do
       local noise = love.math.noise(i/30, j/30)
-      if noise <= 0.20 then
-        local food = Food.new({x = i; y = j})
-        food.color = {
-          r = 100/255;
-          g = 1.0;
-          b = 100/255;
-        }
-        self:AddTile(food)
+      if noise >= 0.50 and noise <= 0.70 then
+        self:CreateFoodAt({x = i; y = j})
+      elseif noise >= 0.85  then
+        self:CreateDeathBlockAt({x = i; y = j})
       end
     end
   end
+end
+
+function World:CreateFoodAt(voxel)
+  if self:TileExistsAt(voxel) then
+    return
+  end
+  local food = Food.new(voxel)
+  food.color = {
+    r = 100/255;
+    g = 1.0;
+    b = 100/255;
+  }
+  self:AddTile(food)
+end
+
+function World:CreateDeathBlockAt(voxel)
+  if self:TileExistsAt(voxel) then
+    return
+  end
+  self:AddTile(DeathBlock.new(voxel))
+end
+
+function World:AddFoodRefresh(voxel)
+  local entry = {
+    targetTime = self.elapsedTime + World.FOOD_REFRESH_TIME + (math.random() - 0.50)*2.0*5.0;
+    voxel = voxel;
+  }
+  table.insert(self.foodRecharge, entry)
 end
 
 function World:ToVoxel(pixelPosition)
@@ -73,6 +140,13 @@ function World:ApplyCameraToPixel(pixelPosition)
   return {
     x = pixelPosition.x + self.cameraPos.x;
     y = pixelPosition.y + self.cameraPos.y;
+  }
+end
+
+function World:ScreenPointToWorldPoint(screenPosition) 
+  return {
+    x = screenPosition.x - self.cameraPos.x;
+    y = screenPosition.y - self.cameraPos.y;
   }
 end
 
