@@ -49,10 +49,16 @@ function love.draw()
   love.graphics.print("creatures: " .. #GAME.creatures, 10, 10)
 
   local leaders = {}
+  local function hash(t) -- subsort by hash of (r+g+b)
+    return math.floor(t.r*255 + t.g*255 + t.b*255) % 17
+  end
   for _, entry in pairs(GAME.leaderboard) do
     table.insert(leaders, entry)
   end
   table.sort(leaders, function(a, b)
+    if a.amount == b.amount then
+      return hash(a) < hash(b)
+    end
     return a.amount > b.amount
   end)
 

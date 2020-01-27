@@ -1,6 +1,6 @@
 local Creature = {}
-Creature.FEELERS = 10
-Creature.FEELER_LENGTH = 55
+Creature.FEELERS = 8
+Creature.FEELER_LENGTH = 85
 Creature.BRAIN_FRAME_SCALE = {
   x = 0.20;
   y = 0.50;
@@ -15,7 +15,7 @@ function Creature.new(x, y)
   
   local inputs = 1 + Creature.FEELERS*2
   local outputs = 2
-  local hiddens = {20}
+  local hiddens = {8}
 
   self.brain = Network.CreateNetwork(inputs, outputs, hiddens)
   self.inputs = {}
@@ -29,6 +29,7 @@ function Creature.new(x, y)
     y = y;
   }
   self.radius = 20
+  self.clockOffset = 2*math.random()*math.pi
 
   self.color = {
     r = math.random();
@@ -39,6 +40,7 @@ function Creature.new(x, y)
 
   self.health = 1.0
   self.foodEaten = 0
+  self.generation = 0
 
   self.brain:TweakWeights(function(old)
     return (math.random() - 0.50) * 2.0
@@ -47,8 +49,8 @@ function Creature.new(x, y)
   self.feelers = {}
   for i = 0, Creature.FEELERS - 1 do
     table.insert(self.feelers, Ray.new(self.pos, {
-      x = math.cos(2*math.pi*(i/Creature.FEELERS) + math.pi/10);
-      y = math.sin(2*math.pi*(i/Creature.FEELERS) + math.pi/10);
+      x = math.cos(2*math.pi*(i/Creature.FEELERS));
+      y = math.sin(2*math.pi*(i/Creature.FEELERS));
     }, Creature.FEELER_LENGTH))
     self.feelers[#self.feelers].touching = false
   end
@@ -65,7 +67,7 @@ function Creature:UpdateOutputs()
 end
 
 function Creature:UpdateInputs()
-  self.inputs[1] = (math.sin(GAME.world.elapsedTime) + 1.0)*0.50
+  self.inputs[1] = (math.sin(GAME.world.elapsedTime + self.clockOffset) + 1.0)*0.50
 
   for i, feeler in ipairs(self.feelers) do
     local nodes = feeler:GetVoxelsOnRay()  
@@ -101,7 +103,7 @@ function Creature:Update(dt)
   for _, feeler in ipairs(self.feelers) do
     feeler:SetOrigin(self.pos)
   end
-  self.health = self.health - dt/400.0
+  self.health = self.health - dt/600.0
 
   local myVoxel = GAME.world:ToVoxel(self.pos)
   local tiles = GAME.world:GetTilesAt(myVoxel)
@@ -134,18 +136,25 @@ end
 
 function Creature:Reproduce()
   local creature = Creature.new(self.pos.x, self.pos.y)
+  creature.generation = self.generation + 1
   creature.brain = self.brain:Duplicate()
-  creature.brain:TweakWeights(function(oldWeight)
-    if math.random() < 0.80 then
-      return oldWeight
-    end
-    return oldWeight + (math.random() - 0.50)*2.0*0.30
-  end)
+  if math.random() < 0.70 then
+    creature.brain:TweakWeights(function(oldWeight)
+      if math.random() < 0.80 then
+        return oldWeight
+      end
+      return oldWeight + (math.random() - 0.50)*2.0*0.30
+    end)
+  end
   creature.color.r = self.color.r
   creature.color.g = self.color.g
   creature.color.b = self.color.b
   creature.colorString = self.colorString
   table.insert(GAME.creatures, creature)
+
+  if math.random() < 0.20 then
+    self:Reproduce()
+  end
 
   GAME.world:UpdateLeaderboard()
 end
@@ -183,6 +192,10 @@ function Creature:Draw()
   -- draw creature body
   love.graphics.setColor(self.color.r, self.color.g, self.color.b)
   love.graphics.circle("fill", rootDrawPos.x, rootDrawPos.y, self.radius)
+
+  -- draw generation number
+  love.graphics.setColor(1, 1, 1)
+  love.graphics.print(tostring(self.generation), rootDrawPos.x - 5, rootDrawPos.y - 8)
 
 end
 

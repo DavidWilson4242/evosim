@@ -1,5 +1,5 @@
 local World = {}
-World.VOXEL_SIZE = 20
+World.VOXEL_SIZE = 50
 World.VOXEL_SX = 300 --math.ceil(love.graphics.getWidth()/World.VOXEL_SIZE)
 World.VOXEL_SY = 300 -- math.ceil(love.graphics.getHeight()/World.VOXEL_SIZE)
 World.ABSOLUTE_SX = World.VOXEL_SIZE*World.VOXEL_SX
@@ -65,6 +65,7 @@ function World:UpdateLeaderboard()
     else
       GAME.leaderboard[creature.colorString] = {
         amount = 1;
+        seed = math.random();
         r = creature.color.r;
         g = creature.color.g;
         b = creature.color.b;
@@ -85,7 +86,7 @@ function World:GenerateEnvironment()
   for i = 1, self.voxelSize.x do
     for j = 1, self.voxelSize.y do
       local noise = love.math.noise(i/30, j/30)
-      if noise >= 0.50 and noise <= 0.70 then
+      if noise >= 0.50 and noise <= 0.70 and math.random() < 0.80 then
         self:CreateFoodAt({x = i; y = j})
       elseif noise >= 0.85  then
         self:CreateDeathBlockAt({x = i; y = j})
